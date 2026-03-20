@@ -85,3 +85,20 @@ for ex: DATA A || DATA B || DATA C || even two are deleted it will replicate fro
 
 
 ______________________________________________________________________________________________________________________________________________________________________________
+message comes to leader then it goes to insync replica
+
+workflow: Producer → writes data → Topic → stored in Partition → Consumer reads
+
+every kafka server is a bootstrap server// if we connect one server it will connect all serveres
+
+
+imp: ZOOKEEPER= it will manage all brokers 
+
+ex: broker die ,new topic or delte topic // without zookeeper yo do not hava kafka  
+
+
+__________________________________________________________________________________________________________________________________
+
+Leader = the main guy who handles all reads and writes for a partition. Followers just silently copy him as backup.
+
+minimum 3 laders undaile // leader talk to the producer and consumer
