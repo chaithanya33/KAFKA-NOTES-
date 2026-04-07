@@ -1,0 +1,170 @@
+Step-by-step Setup 
+--------------------------
+1. Created EKS Cluster
+Kubernetes cluster on AWS
+---------------------------------------------
+2. Created Namespace -- kafka
+Isolation for Kafka resources
+------------------------------------------
+3. Deployed Kafka using StatefulSet
+Kafka needs stable identity + storage + ordering that why we use StatefulSet
+-----------------------------------------------------------------------------------
+  a. Pod Identity (VERY IMPORTANT)
+Your pods:
+kafka-0
+kafka-1
+...
+kafka-7
+👉 These names NEVER change
+👉 Each has DNS:
+kafka-0.kafka-headless
+kafka-1.kafka-headless
+💡 Why needed?
+Kafka brokers must:
+Know each other
+Communicate directly
+👉 Without fixed names → cluster breaks
+DNS = Domain Name System
+👉 It converts names → IP addresses or IP addresses → names
+Problem without DNS
+Pods in Kubernetes get dynamic IPs
+kafka-0 → 10.244.1.23 (today)
+kafka-0 → 10.244.2.55 (after restart ❌
+If Kafka uses IP:
+Brokers cannot find each other
+Cluster breaks ❌
+Why DNS is used in your Kafka StatefulSet?
+Your pods:
+kafka-0
+kafka-1
+kafka-2
+...
+Each pod gets:
+<pod-name>.<headless-service-name>
+Example:
+kafka-0.kafka-headless
+kafka-1.kafka-headless
+👉 This is stable DNS
+How DNS solves it
+Instead of IP, Kafka uses:
+kafka-0.kafka-headless:9092
+kafka-1.kafka-headless:9092
+👉 Even if IP changes:
+DNS updates automatically
+Kafka still connects ✅
+-----------------------------------------------------------
+  b.Role of Headless Service
+You used:
+clusterIP: None
+👉 This creates a Headless Service
+👉 What it does:
+Does NOT give a single IP
+Gives DNS entry for each pod
+So:
+kafka-headless → multiple DNS records:
+kafka-0.kafka-headless.default.svc.cluster.local
+kafka-1.kafka-headless.default.svc.cluster.local
+What is a Headless Service?
+In Kubernetes, a Headless Service is created like this:
+clusterIP: None
+👉 That means:
+No load balancing ❌
+No single service IP ❌
+Direct access to individual pods ✅
+-------------------------------------------------------------
+   c.Volume Claim Template
+From your YAML:
+volumeClaimTemplates:
+  - name: data
+    storageClassName: kafka-gp3
+    resources:
+      requests:
+        storage: 100Gi
+💡 What happens?
+Kubernetes automatically creates:
+data-kafka-0
+data-kafka-1
+…
+👉 One per pod
+-------------------------------------------------------------------
+   d.Kafka Container Inside Each Pod
+From your setup:
+Image: apache/kafka:4.1.1
+Command: /scripts/setup.sh
+💡 What happens?
+When pod starts:
+Container starts
+Runs setup.sh
+Configures Kafka broker
+Starts Kafka server
+---------------------------------------------------------------------
+  e.Environment Variables (KRaft Core)
+CLUSTER_ID
+Kafka cluster needs a unique ID
+Why needed?
+All brokers must belong to same cluster
+If mismatch → cluster will not form ❌
+👉 Simple explanation:
+CLUSTER_ID ensures all Kafka brokers are part of the same cluster.
+
+KAFKA_CONTROLLER_QUORUM_VOTERS
+Kafka needs to know:
+👉 Which brokers act as controllers
+This tells Kafka which brokers will manage cluster metadata and leader election.
+
+------------------------------------------------------------------
+Service
+kafka-bootstrap 
+is a Kubernetes Service that acts as the entry point for clients (applications) to connect to your Kafka cluster(kafka-bootstrap:9092).
+Think of Kafka cluster like a group of servers (brokers):
+You don’t want your app to connect to each broker manually ❌
+Instead, you give one address → that’s kafka-bootstrap ✅
+👉 It works like a “entry point” to Kafka.
+What Exactly It Does
+It is usually a ClusterIP service
+It points to all Kafka brokers (pods)
+It provides a single DNS name
+Example:
+kafka-bootstrap.default.svc.cluster.local:9092
+Your app connects to this 👆
+How It Works Internally
+Your app connects to kafka-bootstrap
+Kafka returns metadata (list of all brokers)
+After that:
+Producer/Consumer directly talks to correct broker
+👉 So bootstrap is only for initial connection, not full traffic
+---------------------------------------------------------------------
+kafka-headless
+Broker internal communication
+---------------------------------------------------------------------
+kafka-nlb
+Inside Kubernetes → everything works fine using kafka-bootstrap ✅
+Outside Kubernetes (your laptop, another server, external app) → cannot access ❌
+👉 So we create kafka-nlb to expose Kafka to the outside world
+--------------------------------------------------------------------
+kafka-ui
+A web UI to view and manage Kafka , for Monitoring
+----------------------------------------------------------------------
+Health Checks ----kafka-broker-api-versions.sh
+Why Your Setup Uses This for Health Checks
+From your StatefulSet:
+Liveness:
+kafka-broker-api-versions.sh --bootstrap-server localhost:9092
+“Is Kafka still alive?” If ❌ fails: Kubernetes restarts the pod
+Readiness:
+kafka-broker-api-versions.sh --bootstrap-server localhost:9092
+“Is Kafka ready to accept traffic?” If ❌ fails: Traffic is NOT sent to this pod
+
+
+
+kubectl get ns
+kubectl get all -n kafka
+kubectl get pods -n kafka -o wide
+kubectl get statefulset -n kafka
+kubectl describe statefulset kafka -n kafka
+kubectl get pvc -n kafka
+kubectl get svc -n kafka
+kubectl logs kafka-0 -n kafka | tail -20
+
+
+now i want to show each step and need to explain so give me step wise including commands so i will explain each step , why bcz i have k8s access
